@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
 
@@ -45,12 +46,28 @@ col2.metric("Requerimiento Fijo (lbs)", f"{requerimiento_fijo:,.2f}")
 col3.metric("Pérdida Total (lbs)", f"{perdida_total:,.4f}")
 col4.metric("Alloy a Pedir (lbs)", f"{alloy_a_pedir:,.2f}")
 
-# --- Gráfica barras ---
+# --- Gráfica barras con Plotly ---
 st.subheader("📊 Comparación Alloy Disponible vs Necesario")
-chart_data = pd.DataFrame({
-    'Alloy (lbs)': [peso_lbs, alloy_total_necesario]
-}, index=['Disponible','Requerido + Pérdida'])
-st.bar_chart(chart_data)
+bar_fig = go.Figure(data=[
+    go.Bar(name='Disponible', x=['Alloy'], y=[peso_lbs], marker_color='green'),
+    go.Bar(name='Requerido + Pérdida', x=['Alloy'], y=[alloy_total_necesario], marker_color='orange')
+])
+bar_fig.update_layout(barmode='group', yaxis_title='Libras', template='plotly_white')
+st.plotly_chart(bar_fig, use_container_width=True)
+
+# --- Gauge (Velocímetro) ---
+st.subheader("⏱️ Nivel de Alloy Disponible")
+max_val = max(peso_lbs, alloy_total_necesario) * 1.2  # escala
+gauge = go.Figure(go.Indicator(
+    mode="gauge+number",
+    value=peso_lbs,
+    title={'text': "Alloy Disponible (lbs)"},
+    gauge={'axis': {'range': [0, max_val]},
+           'bar': {'color': "green"},
+           'steps': [
+               {'range': [0, alloy_total_necesario], 'color': "orange"},
+               {'range': [alloy_total_necesario, max_val], 'color': "lightgreen"}]}))
+st.plotly_chart(gauge, use_container_width=True)
 
 # --- Registro histórico ---
 st.subheader("📑 Registros de control")
@@ -77,9 +94,9 @@ if st.button("Guardar registro"):
 
 st.dataframe(st.session_state["registros"], use_container_width=True)
 
-# Descargar Excel
+# Descargar Excel (sin xlsxwriter)
 buffer = io.BytesIO()
-with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+with pd.ExcelWriter(buffer) as writer:
     st.session_state["registros"].to_excel(writer, index=False, sheet_name="Registros")
 
 st.download_button(
