@@ -1,10 +1,8 @@
 # app_alloy_streamlit.py
+import io
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-
-
 
 st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
 
@@ -96,14 +94,15 @@ if st.button("Guardar registro"):
 
 st.dataframe(st.session_state["registros"], use_container_width=True)
 
-# Descargar Excel (sin xlsxwriter)
+# Descargar Excel
 buffer = io.BytesIO()
-with pd.ExcelWriter(buffer) as writer:
+with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
     st.session_state["registros"].to_excel(writer, index=False, sheet_name="Registros")
+buffer.seek(0)
 
 st.download_button(
     label="📥 Descargar registros en Excel",
-    data=buffer,
+    data=buffer.getvalue(),
     file_name="Registros_Alloy.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
