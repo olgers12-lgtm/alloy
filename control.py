@@ -7,8 +7,8 @@ from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
 
-st.title("⚙️ Alloy Dashboard Industrial")
-st.markdown("Visualiza y controla tu consumo de Alloy con recuperación y pérdidas mínimas.")
+st.title("⚙️ Alloy Dashboard")
+st.markdown("Visualización y control de consumo de Alloy .")
 
 # --- Conexión a Google Sheets ---
 COLUMNS = [
