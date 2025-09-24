@@ -147,3 +147,21 @@ st.download_button(
     file_name="Registros_Alloy.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
+
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+
+with st.expander("Diagnóstico conexión Google Sheets", expanded=False):
+    try:
+        st.write("Service Account:", st.secrets["connections"]["gsheets"]["client_email"])
+        st.write("Spreadsheet config:", st.secrets["connections"]["gsheets"]["spreadsheet"])
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = pd.DataFrame(conn.read(worksheet="Registros", ttl=0))
+        st.success("Conexión OK. Se leyó la pestaña 'Registros'.")
+        st.dataframe(df.head())
+    except Exception as e:
+        st.error(f"Error conectando a Google Sheets: {e}")
+        st.info("Verifica: 1) hoja compartida con el Service Account como Editor, "
+                "2) URL/ID correcto en Secrets, 3) pestaña 'Registros' existe, "
+                "4) APIs habilitadas (Sheets y Drive), 5) si es Unidad compartida, agrega el SA a la Unidad.")
