@@ -1,15 +1,14 @@
-# app_alloy.py
+# app_alloy_streamlit.py
 import streamlit as st
 import pandas as pd
-import numpy as np
 import io
 
-st.set_page_config(page_title="Alloy Dashboard", layout="wide")
+st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
 
 st.title("⚙️ Alloy Dashboard Industrial")
 st.markdown("Visualiza y controla tu consumo de Alloy con recuperación y pérdidas mínimas.")
 
-# --- Inputs ---
+# --- Sidebar ---
 st.sidebar.header("🔧 Parámetros de proceso")
 peso_kg = st.sidebar.number_input("Peso actual de Alloy (kg)", value=50.0, step=1.0)
 num_maquinas = st.sidebar.number_input("Número de máquinas", value=2, step=1)
@@ -27,11 +26,7 @@ peso_lbs = peso_kg * 2.20462
 # Alloy fijo
 requerimiento_fijo = num_maquinas * alloy_por_maquina + alloy_superficie + alloy_recuperadora
 
-# Consumo real por trabajos (con recuperación y pérdida)
-consumo_estandar = trabajos_estandar * 0.78   # lbs "en proceso"
-consumo_free = trabajos_free * 0.30
-
-# Recuperación: 99.99% se recupera, pérdida de 0.1 g/trabajo (~0.000220462 lbs/trabajo)
+# Pérdida mínima por trabajo (0.1 g)
 perdida_por_trabajo_lbs = 0.000220462
 perdida_total = (trabajos_estandar + trabajos_free) * perdida_por_trabajo_lbs
 
@@ -43,24 +38,19 @@ sobrante = peso_lbs - alloy_total_necesario
 necesita_pedir = sobrante < 0
 alloy_a_pedir = abs(sobrante) if necesita_pedir else 0
 
-# --- Mostrar métricas ---
+# --- Métricas visuales ---
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Alloy Disponible (lbs)", f"{peso_lbs:,.2f}")
-col2.metric("Alloy Fijo Requerido (lbs)", f"{requerimiento_fijo:,.2f}")
+col2.metric("Requerimiento Fijo (lbs)", f"{requerimiento_fijo:,.2f}")
 col3.metric("Pérdida Total (lbs)", f"{perdida_total:,.4f}")
 col4.metric("Alloy a Pedir (lbs)", f"{alloy_a_pedir:,.2f}")
 
-# --- Gráficos ---
-st.subheader("📊 Visualización del consumo de Alloy")
-import matplotlib.pyplot as plt
-
-fig, ax = plt.subplots(figsize=(6,4))
-labels = ['Disponible', 'Requerido + Pérdida']
-values = [peso_lbs, alloy_total_necesario]
-ax.bar(labels, values, color=['#4CAF50','#FF5722'])
-ax.set_ylabel('Libras')
-ax.set_title('Comparación Alloy Disponible vs Necesario')
-st.pyplot(fig)
+# --- Gráfica barras ---
+st.subheader("📊 Comparación Alloy Disponible vs Necesario")
+chart_data = pd.DataFrame({
+    'Alloy (lbs)': [peso_lbs, alloy_total_necesario]
+}, index=['Disponible','Requerido + Pérdida'])
+st.bar_chart(chart_data)
 
 # --- Registro histórico ---
 st.subheader("📑 Registros de control")
@@ -85,7 +75,7 @@ if st.button("Guardar registro"):
         ignore_index=True
     )
 
-st.dataframe(st.session_state["registros"])
+st.dataframe(st.session_state["registros"], use_container_width=True)
 
 # Descargar Excel
 buffer = io.BytesIO()
