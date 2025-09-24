@@ -6,8 +6,8 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
 
-st.title("⚙️ Alloy Dashboard Industrial")
-st.markdown("Visualiza y controla tu consumo de Alloy con recuperación y pérdidas mínimas.")
+st.title("⚙️ Alloy Dashboard")
+st.markdown("Visualizar y controlar consumo de Alloy.")
 
 # --- Sidebar ---
 st.sidebar.header("🔧 Parámetros de proceso")
