@@ -1,86 +1,100 @@
+# app_alloy.py
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import os
+import numpy as np
+import io
 
-st.set_page_config(page_title="Control de Alloy", page_icon="⚙️", layout="centered")
+st.set_page_config(page_title="Alloy Dashboard", layout="wide")
 
-st.title("⚙️ Control de Alloy")
-st.write("Calculadora y registro de requerimiento y disponibilidad de Alloy")
+st.title("⚙️ Alloy Dashboard Industrial")
+st.markdown("Visualiza y controla tu consumo de Alloy con recuperación y pérdidas mínimas.")
 
 # --- Inputs ---
-st.header("📥 Ingreso de datos")
+st.sidebar.header("🔧 Parámetros de proceso")
+peso_kg = st.sidebar.number_input("Peso actual de Alloy (kg)", value=50.0, step=1.0)
+num_maquinas = st.sidebar.number_input("Número de máquinas", value=2, step=1)
+alloy_por_maquina = st.sidebar.number_input("Alloy por máquina (lbs)", value=35.0, step=1.0)
+alloy_superficie = st.sidebar.number_input("Alloy línea superficies (lbs)", value=50.0, step=1.0)
+alloy_recuperadora = st.sidebar.number_input("Alloy recuperadora (lbs)", value=17.0, step=1.0)
 
-peso_kg = st.number_input("Peso actual de Alloy (kg)", min_value=0.0, value=0.0, step=1.0)
-num_maquinas = st.number_input("Número de máquinas", min_value=1, value=2, step=1)
-alloy_por_maquina = st.number_input("Alloy por máquina (lbs)", min_value=0.0, value=35.0, step=1.0)
-superficies = st.number_input("Superficies (lbs)", min_value=0.0, value=50.0, step=1.0)
-recuperadora = st.number_input("Recuperadora (lbs)", min_value=0.0, value=17.0, step=1.0)
-
-trabajos_estandar = st.number_input("Trabajos Estándar en proceso", min_value=0, value=0, step=1)
-trabajos_free = st.number_input("Trabajos Free en proceso", min_value=0, value=0, step=1)
+st.sidebar.subheader("🔧 Producción")
+trabajos_estandar = st.sidebar.number_input("Trabajos estándar", value=100, step=1)
+trabajos_free = st.sidebar.number_input("Trabajos free", value=50, step=1)
 
 # --- Cálculos ---
-lbs_disponible = peso_kg * 2.20462
-requerimiento_maquinas = num_maquinas * alloy_por_maquina
-consumo_trabajos = trabajos_estandar * 0.78 + trabajos_free * 0.30
-total_requerido = requerimiento_maquinas + superficies + recuperadora + consumo_trabajos
-sobrante = lbs_disponible - total_requerido
+peso_lbs = peso_kg * 2.20462
 
-# --- Resultados ---
-st.header("📊 Resultados")
-st.write(f"**Alloy disponible (lbs):** {lbs_disponible:.2f}")
-st.write(f"**Requerimiento máquinas (lbs):** {requerimiento_maquinas:.2f}")
-st.write(f"**Consumo trabajos (lbs):** {consumo_trabajos:.2f}")
-st.write(f"**Total requerido (lbs):** {total_requerido:.2f}")
-st.write(f"**Alloy sobrante (lbs):** {sobrante:.2f}")
+# Alloy fijo
+requerimiento_fijo = num_maquinas * alloy_por_maquina + alloy_superficie + alloy_recuperadora
 
-estado = "SUFICIENTE"
-if sobrante < 0:
-    estado = "PEDIR MÁS ALLOY"
-    st.error(f"⚠️ PEDIR MÁS ALLOY. Faltan {-sobrante:.2f} lbs.")
-else:
-    st.success("✅ Suficiente Alloy disponible.")
+# Consumo real por trabajos (con recuperación y pérdida)
+consumo_estandar = trabajos_estandar * 0.78   # lbs "en proceso"
+consumo_free = trabajos_free * 0.30
 
-# --- Registro ---
-st.header("📝 Guardar registro")
+# Recuperación: 99.99% se recupera, pérdida de 0.1 g/trabajo (~0.000220462 lbs/trabajo)
+perdida_por_trabajo_lbs = 0.000220462
+perdida_total = (trabajos_estandar + trabajos_free) * perdida_por_trabajo_lbs
+
+# Alloy necesario total
+alloy_total_necesario = requerimiento_fijo + perdida_total
+
+# Evaluación
+sobrante = peso_lbs - alloy_total_necesario
+necesita_pedir = sobrante < 0
+alloy_a_pedir = abs(sobrante) if necesita_pedir else 0
+
+# --- Mostrar métricas ---
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Alloy Disponible (lbs)", f"{peso_lbs:,.2f}")
+col2.metric("Alloy Fijo Requerido (lbs)", f"{requerimiento_fijo:,.2f}")
+col3.metric("Pérdida Total (lbs)", f"{perdida_total:,.4f}")
+col4.metric("Alloy a Pedir (lbs)", f"{alloy_a_pedir:,.2f}")
+
+# --- Gráficos ---
+st.subheader("📊 Visualización del consumo de Alloy")
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(figsize=(6,4))
+labels = ['Disponible', 'Requerido + Pérdida']
+values = [peso_lbs, alloy_total_necesario]
+ax.bar(labels, values, color=['#4CAF50','#FF5722'])
+ax.set_ylabel('Libras')
+ax.set_title('Comparación Alloy Disponible vs Necesario')
+st.pyplot(fig)
+
+# --- Registro histórico ---
+st.subheader("📑 Registros de control")
+if "registros" not in st.session_state:
+    st.session_state["registros"] = pd.DataFrame(columns=[
+        "Peso Alloy (lbs)", "Máquinas", "Trabajos Estándar", "Trabajos Free",
+        "Alloy Necesario (lbs)", "Pérdida Total (lbs)", "Alloy a Pedir (lbs)"
+    ])
 
 if st.button("Guardar registro"):
-    # Cargar historial existente
-    file_name = "historial_alloy.csv"
-    if os.path.exists(file_name):
-        df = pd.read_csv(file_name)
-    else:
-        df = pd.DataFrame(columns=["FechaHora","Peso_kg","Num_maquinas","Alloy_maquina_lbs","Superficies_lbs",
-                                   "Recuperadora_lbs","Trabajos_estandar","Trabajos_free","Disponible_lbs",
-                                   "Requerimiento_maquinas","Consumo_trabajos","Total_requerido","Sobrante","Estado"])
-    
-    new_row = {
-        "FechaHora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Peso_kg": peso_kg,
-        "Num_maquinas": num_maquinas,
-        "Alloy_maquina_lbs": alloy_por_maquina,
-        "Superficies_lbs": superficies,
-        "Recuperadora_lbs": recuperadora,
-        "Trabajos_estandar": trabajos_estandar,
-        "Trabajos_free": trabajos_free,
-        "Disponible_lbs": lbs_disponible,
-        "Requerimiento_maquinas": requerimiento_maquinas,
-        "Consumo_trabajos": consumo_trabajos,
-        "Total_requerido": total_requerido,
-        "Sobrante": sobrante,
-        "Estado": estado
+    nuevo_registro = {
+        "Peso Alloy (lbs)": peso_lbs,
+        "Máquinas": num_maquinas,
+        "Trabajos Estándar": trabajos_estandar,
+        "Trabajos Free": trabajos_free,
+        "Alloy Necesario (lbs)": alloy_total_necesario,
+        "Pérdida Total (lbs)": perdida_total,
+        "Alloy a Pedir (lbs)": alloy_a_pedir
     }
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    df.to_csv(file_name, index=False)
-    st.success("Registro guardado correctamente ✅")
+    st.session_state["registros"] = pd.concat(
+        [st.session_state["registros"], pd.DataFrame([nuevo_registro])],
+        ignore_index=True
+    )
 
-# --- Ver historial ---
-st.header("📂 Historial de registros")
-file_name = "historial_alloy.csv"
-if os.path.exists(file_name):
-    df = pd.read_csv(file_name)
-    st.dataframe(df)
-else:
-    st.info("No hay registros todavía.")
+st.dataframe(st.session_state["registros"])
 
+# Descargar Excel
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+    st.session_state["registros"].to_excel(writer, index=False, sheet_name="Registros")
+
+st.download_button(
+    label="📥 Descargar registros en Excel",
+    data=buffer,
+    file_name="Registros_Alloy.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
