@@ -3,11 +3,53 @@ import io
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
 
-st.title("⚙️ Alloy Dashboard")
-st.markdown("Visualizar y controlar consumo de Alloy.")
+st.title("⚙️ Alloy Dashboard Industrial")
+st.markdown("Visualiza y controla tu consumo de Alloy con recuperación y pérdidas mínimas.")
+
+# --- Conexión a Google Sheets ---
+COLUMNS = [
+    "Peso Alloy (lbs)", "Máquinas", "Trabajos Estándar", "Trabajos Free",
+    "Alloy Necesario (lbs)", "Pérdida Total (lbs)", "Alloy a Pedir (lbs)"
+]
+
+@st.cache_data(show_spinner=False, ttl=0)
+def load_registros_from_gsheets() -> pd.DataFrame:
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        # La URL del spreadsheet la defines en Secrets; ver instrucciones abajo.
+        df = conn.read(worksheet="Registros", ttl=0)
+        df = pd.DataFrame(df)
+        # Limpia filas totalmente vacías y asegura columnas
+        if df.empty:
+            return pd.DataFrame(columns=COLUMNS)
+        # Asegura el orden de columnas
+        missing = [c for c in COLUMNS if c not in df.columns]
+        for c in missing:
+            df[c] = pd.NA
+        return df[COLUMNS]
+    except Exception as e:
+        st.warning(f"No se pudo cargar registros desde Google Sheets: {e}")
+        return pd.DataFrame(columns=COLUMNS)
+
+def save_registro_to_gsheets(nuevo_registro: dict):
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Vuelve a leer para evitar sobrescribir cambios de otros
+    df_actual = conn.read(worksheet="Registros", ttl=0)
+    df_actual = pd.DataFrame(df_actual)
+    if df_actual.empty:
+        df_actual = pd.DataFrame(columns=COLUMNS)
+    # Asegura columnas
+    missing = [c for c in COLUMNS if c not in df_actual.columns]
+    for c in missing:
+        df_actual[c] = pd.NA
+    df_actual = df_actual[COLUMNS]
+
+    df_nuevo = pd.concat([df_actual, pd.DataFrame([nuevo_registro])], ignore_index=True)
+    conn.update(worksheet="Registros", data=df_nuevo)
 
 # --- Sidebar ---
 st.sidebar.header("🔧 Parámetros de proceso")
@@ -69,14 +111,12 @@ gauge = go.Figure(go.Indicator(
                {'range': [alloy_total_necesario, max_val], 'color': "lightgreen"}]}))
 st.plotly_chart(gauge, use_container_width=True)
 
-# --- Registro histórico ---
+# --- Registro histórico (persistente) ---
 st.subheader("📑 Registros de control")
 if "registros" not in st.session_state:
-    st.session_state["registros"] = pd.DataFrame(columns=[
-        "Peso Alloy (lbs)", "Máquinas", "Trabajos Estándar", "Trabajos Free",
-        "Alloy Necesario (lbs)", "Pérdida Total (lbs)", "Alloy a Pedir (lbs)"
-    ])
+    st.session_state["registros"] = load_registros_from_gsheets()
 
+# Botón para guardar (anexa y sube a Sheets)
 if st.button("Guardar registro"):
     nuevo_registro = {
         "Peso Alloy (lbs)": peso_lbs,
@@ -87,10 +127,11 @@ if st.button("Guardar registro"):
         "Pérdida Total (lbs)": perdida_total,
         "Alloy a Pedir (lbs)": alloy_a_pedir
     }
-    st.session_state["registros"] = pd.concat(
-        [st.session_state["registros"], pd.DataFrame([nuevo_registro])],
-        ignore_index=True
-    )
+    # Guarda en Google Sheets
+    save_registro_to_gsheets(nuevo_registro)
+    # Refresca tabla local
+    st.session_state["registros"] = load_registros_from_gsheets()
+    st.success("Registro guardado en Google Sheets.")
 
 st.dataframe(st.session_state["registros"], use_container_width=True)
 
