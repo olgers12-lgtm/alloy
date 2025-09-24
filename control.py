@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import io
 import plotly.graph_objects as go
-pip install plotly
 
 
 st.set_page_config(page_title="Alloy Dashboard", page_icon="⚙️", layout="wide")
